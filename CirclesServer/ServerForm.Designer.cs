@@ -28,21 +28,35 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.bt_StartServer = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
-            // Form1
+            // bt_StartServer
+            // 
+            this.bt_StartServer.Location = new System.Drawing.Point(133, 170);
+            this.bt_StartServer.Name = "bt_StartServer";
+            this.bt_StartServer.Size = new System.Drawing.Size(227, 50);
+            this.bt_StartServer.TabIndex = 0;
+            this.bt_StartServer.Text = "Start Server";
+            this.bt_StartServer.UseVisualStyleBackColor = true;
+            this.bt_StartServer.Click += new System.EventHandler(this.StartServer_Click);
+            // 
+            // ServerForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.ClientSize = new System.Drawing.Size(479, 254);
+            this.Controls.Add(this.bt_StartServer);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
-            this.Name = "Form1";
+            this.Name = "ServerForm";
             this.Text = "Server";
             this.ResumeLayout(false);
 
         }
 
         #endregion
+
+        private System.Windows.Forms.Button bt_StartServer;
     }
 }
 

@@ -4,9 +4,14 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.IO;
 
 namespace CirclesClient
 {
@@ -18,18 +23,49 @@ namespace CirclesClient
         delete,
     }
 
+
+
     public partial class ClientForm : Form
     {
         private List<Circle> CircleList = new List<Circle>();
         private DrawingMode DrawMode = DrawingMode.draw;
-        Point DrawStartPoint = new Point();
+        Point LastClickPoint = new Point();
+
+        // Original center of a circle when moving it
+        Point OriginalCenter = new Point();
+
+        //True if a circle is being drawn
         bool bIsDrawingCircle = false;
 
-        int CurrentCircleIndex = 0;
+        //True if a circle is being moved
+        bool bIsMovingCircle = false;
+
+        //Index of the currently selected circle
+        private int SelectedCircleIndex = -1;
+
+        int CurrentDrawCircleIndex = 0;
+
+        // Are we drawing a ghost circle because the current circle is colliding
+        bool bDrawGhostCircle = false;
+
+        Circle GhostCircle = new Circle();
+
+        // Socket connection
+
+        IPHostEntry ipHostInfo;
+        IPAddress ipAddress;
+        IPEndPoint remoteEP;
+        Socket senderSocket;
+
+        bool bIsConnected = false;
 
         public ClientForm()
         {
             InitializeComponent();
+
+            typeof(Panel).InvokeMember("DoubleBuffered", BindingFlags.SetProperty | BindingFlags.Instance | BindingFlags.NonPublic, null, pn_DrawingPanel, new object[] { true });
+
+            SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
         }
 
         private void bt_Move_Click(object sender, EventArgs e)
@@ -67,24 +103,75 @@ namespace CirclesClient
             foreach (Circle CircleToDraw in CircleList)
             {
                 Rectangle CircleBounds = ComputeCircleBounds(CircleToDraw.Center, CircleToDraw.Radius);
-                Pen CirclePen = new Pen(CircleToDraw.GetCircleColor());
 
+                Pen CirclePen = new Pen(Color.Black);
+                SolidBrush CircleBrush = new SolidBrush(CircleToDraw.GetCircleColor());
+
+                e.Graphics.FillEllipse(CircleBrush, CircleBounds);
                 e.Graphics.DrawEllipse(CirclePen, CircleBounds);
+            }
+            if (bDrawGhostCircle)
+            {
+                Rectangle GhostBounds = ComputeCircleBounds(GhostCircle.Center, GhostCircle.Radius);
+                Color GhostColor = Color.FromArgb(128, 0, 0, 0);
+
+                SolidBrush GhostBrush = new SolidBrush(GhostColor);
+
+                e.Graphics.FillEllipse(GhostBrush, GhostBounds);
             }
         }
 
         private void pn_DrawingPanel_MouseDown(object sender, MouseEventArgs e)
         {
-            if (DrawMode == DrawingMode.draw && !bIsDrawingCircle)
+            if (bIsConnected)
             {
-                bIsDrawingCircle = true;
-                DrawStartPoint = e.Location;
+                if (DrawMode == DrawingMode.draw && !bIsDrawingCircle)
+                {
+                    LastClickPoint = e.Location;
+                    Circle NewCircle = new Circle(0, LastClickPoint, pn_ColorSelectPanel.BackColor);
+                    NewCircle.Index = CircleList.Count;
 
-                Circle NewCircle = new Circle(0, DrawStartPoint, Color.Red);
-                CircleList.Add(NewCircle);
+                    if (SendCircleRequest(NewCircle))
+                    {
+                        bIsDrawingCircle = true;
+                        CircleList.Add(NewCircle);
 
-                CurrentCircleIndex = CircleList.Count - 1;
-                pn_DrawingPanel.Invalidate();
+                        CurrentDrawCircleIndex = NewCircle.Index;
+                        pn_DrawingPanel.Invalidate();
+                    }
+
+                }
+                else if (DrawMode == DrawingMode.move)
+                {
+                    SelectedCircleIndex = SelectCircle(e.Location);
+                    if (SelectedCircleIndex > -1)
+                    {
+                        OriginalCenter = CircleList[SelectedCircleIndex].Center;
+                    }
+                    LastClickPoint = e.Location;
+                }
+                else if (DrawMode == DrawingMode.delete)
+                {
+                    SelectedCircleIndex = SelectCircle(e.Location);
+                    if (SelectedCircleIndex > -1)
+                    {
+                        int CacheRadius = CircleList[SelectedCircleIndex].Radius;
+                        CircleList[SelectedCircleIndex].Radius = -1;
+
+                        if (SendCircleRequest(CircleList[SelectedCircleIndex]))
+                        {
+                            CircleList.RemoveAt(SelectedCircleIndex);
+                            SelectedCircleIndex = -1;
+                            pn_DrawingPanel.Invalidate();
+                        }
+                        else
+                        {
+                            CircleList[SelectedCircleIndex].Radius = CacheRadius;
+                            SelectedCircleIndex = -1;
+                        }
+
+                    }
+                }
             }
         }
 
@@ -92,24 +179,169 @@ namespace CirclesClient
         {
             if (DrawMode == DrawingMode.draw && bIsDrawingCircle)
             {
-                Point DeltaPoint = new Point();
-                DeltaPoint.X = e.X - DrawStartPoint.X;
-                DeltaPoint.Y = e.Y - DrawStartPoint.Y;
-
+                int CacheRadius = CircleList[CurrentDrawCircleIndex].Radius;
                 double MouseMoveDistance = 0;
-                MouseMoveDistance = Math.Sqrt((DeltaPoint.X * DeltaPoint.X) + (DeltaPoint.Y * DeltaPoint.Y));
+                MouseMoveDistance = Distance(e.Location, LastClickPoint);
 
-                CircleList[CurrentCircleIndex].Radius = (int) MouseMoveDistance;
-                pn_DrawingPanel.Invalidate();
+                CircleList[CurrentDrawCircleIndex].Radius = (int)MouseMoveDistance;
+
+                if (!SendCircleRequest(CircleList[CurrentDrawCircleIndex]))
+                {
+                    GhostCircle.Center = CircleList[CurrentDrawCircleIndex].Center;
+                    GhostCircle.Radius = CircleList[CurrentDrawCircleIndex].Radius;
+
+                    CircleList[CurrentDrawCircleIndex].Radius = CacheRadius;
+                    bDrawGhostCircle = true;
+                    pn_DrawingPanel.Invalidate();
+                }
+                else
+                {
+                    bDrawGhostCircle = false;
+                    pn_DrawingPanel.Invalidate();
+                }
+            }
+            else if (DrawMode == DrawingMode.move && SelectedCircleIndex > -1)
+            {
+                Point MouseMovePoint = new Point();
+                MouseMovePoint.X = e.X - LastClickPoint.X;
+                MouseMovePoint.Y = e.Y - LastClickPoint.Y;
+
+                Point NewCenter = new Point();
+                NewCenter.X = OriginalCenter.X + MouseMovePoint.X;
+                NewCenter.Y = OriginalCenter.Y + MouseMovePoint.Y;
+
+                Point CacheCenter = CircleList[SelectedCircleIndex].Center;
+                CircleList[SelectedCircleIndex].Center = NewCenter;
+
+                if (!SendCircleRequest(CircleList[SelectedCircleIndex]))
+                {
+                    GhostCircle.Center = CircleList[SelectedCircleIndex].Center;
+                    GhostCircle.Radius = CircleList[SelectedCircleIndex].Radius;
+
+                    bDrawGhostCircle = true;
+
+                    CircleList[SelectedCircleIndex].Center = CacheCenter;
+                    pn_DrawingPanel.Invalidate();
+                }
+                else
+                {
+                    bDrawGhostCircle = false;
+                    pn_DrawingPanel.Invalidate();
+                }
             }
         }
 
         private void pn_DrawingPanel_MouseUp(object sender, MouseEventArgs e)
         {
-            if(DrawMode == DrawingMode.draw && bIsDrawingCircle)
+            if (DrawMode == DrawingMode.draw && bIsDrawingCircle)
             {
                 bIsDrawingCircle = false;
+                bDrawGhostCircle = false;
+                pn_DrawingPanel.Invalidate();
             }
+            else if (DrawMode == DrawingMode.move && SelectedCircleIndex > -1)
+            {
+                SelectedCircleIndex = -1;
+                bDrawGhostCircle = false;
+                pn_DrawingPanel.Invalidate();
+            }
+        }
+
+        //Returns the index of the circle under the Selection Point, returns -1 if there is no circle
+        private int SelectCircle(Point SelectionPoint)
+        {
+            int OutIndex = -1;
+            for (int i = 0; i < CircleList.Count; i++)
+            {
+                double MouseToCircleDistance;
+
+                MouseToCircleDistance = Distance(SelectionPoint, CircleList[i].Center);
+
+                if (MouseToCircleDistance < CircleList[i].Radius)
+                {
+                    OutIndex = i;
+                    break;
+                }
+            }
+            return OutIndex;
+        }
+
+        private double Distance(Point p1, Point p2)
+        {
+            double OutDistance;
+
+
+            Point DeltaPoint = new Point();
+            DeltaPoint.X = p2.X - p1.X;
+            DeltaPoint.Y = p2.Y - p1.Y;
+
+            OutDistance = Math.Sqrt((DeltaPoint.X * DeltaPoint.X) + (DeltaPoint.Y * DeltaPoint.Y));
+
+            return OutDistance;
+        }
+
+        private void pn_ColorSelectPanel_MouseDown(object sender, MouseEventArgs e)
+        {
+            colorDialog_drawColor.ShowDialog();
+            pn_ColorSelectPanel.BackColor = colorDialog_drawColor.Color;
+        }
+
+        private void ClientForm_Load(object sender, EventArgs e)
+        {
+            ipHostInfo = Dns.GetHostEntry("");
+            ipAddress = ipHostInfo.AddressList[0];
+            remoteEP = new IPEndPoint(ipAddress, 11000);
+
+            senderSocket = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+        }
+
+        private void bt_Connect_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                senderSocket.Connect(remoteEP);
+
+                MessageBox.Show("Socket connected to {0}" + senderSocket.RemoteEndPoint.ToString());
+                bt_Connect.Enabled = false;
+                bIsConnected = true;
+                bt_Delete.Enabled = true;
+                bt_Draw.Enabled = true;
+                bt_Move.Enabled = true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.ToString());
+            }
+
+        }
+
+        private bool SendCircleRequest(Circle circleToSend)
+        {
+            bool outBool = false;
+
+            byte[] bufferBytes = new byte[2];
+            byte[] sendBytes = SerializeCircle(circleToSend);
+
+            int bytesSent = senderSocket.Send(sendBytes);
+            int bytesRec = senderSocket.Receive(bufferBytes);
+
+            outBool = BitConverter.ToBoolean(bufferBytes, 0);
+
+            return outBool;
+        }
+
+        private byte[] SerializeCircle(Circle circleToSerialize)
+        {
+            BinaryFormatter formatter = new BinaryFormatter();
+            byte[] outData;
+
+            using (var ms = new MemoryStream())
+            {
+                formatter.Serialize(ms, circleToSerialize);
+                outData = ms.ToArray();
+            }
+
+            return outData;
         }
     }
 }

@@ -33,6 +33,9 @@
             this.bt_Move = new System.Windows.Forms.Button();
             this.bt_Delete = new System.Windows.Forms.Button();
             this.lb_ModeDisplay = new System.Windows.Forms.Label();
+            this.colorDialog_drawColor = new System.Windows.Forms.ColorDialog();
+            this.pn_ColorSelectPanel = new System.Windows.Forms.Panel();
+            this.bt_Connect = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // pn_DrawingPanel
@@ -50,6 +53,7 @@
             // 
             // bt_Draw
             // 
+            this.bt_Draw.Enabled = false;
             this.bt_Draw.Location = new System.Drawing.Point(27, 170);
             this.bt_Draw.Name = "bt_Draw";
             this.bt_Draw.Size = new System.Drawing.Size(100, 30);
@@ -60,6 +64,7 @@
             // 
             // bt_Move
             // 
+            this.bt_Move.Enabled = false;
             this.bt_Move.Location = new System.Drawing.Point(27, 270);
             this.bt_Move.Name = "bt_Move";
             this.bt_Move.Size = new System.Drawing.Size(100, 30);
@@ -70,6 +75,7 @@
             // 
             // bt_Delete
             // 
+            this.bt_Delete.Enabled = false;
             this.bt_Delete.Location = new System.Drawing.Point(27, 370);
             this.bt_Delete.Name = "bt_Delete";
             this.bt_Delete.Size = new System.Drawing.Size(100, 30);
@@ -89,19 +95,48 @@
             this.lb_ModeDisplay.Text = "Draw Mode";
             this.lb_ModeDisplay.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
+            // colorDialog_drawColor
+            // 
+            this.colorDialog_drawColor.AnyColor = true;
+            this.colorDialog_drawColor.FullOpen = true;
+            // 
+            // pn_ColorSelectPanel
+            // 
+            this.pn_ColorSelectPanel.BackColor = System.Drawing.Color.Red;
+            this.pn_ColorSelectPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.pn_ColorSelectPanel.Location = new System.Drawing.Point(27, 489);
+            this.pn_ColorSelectPanel.Name = "pn_ColorSelectPanel";
+            this.pn_ColorSelectPanel.Size = new System.Drawing.Size(100, 97);
+            this.pn_ColorSelectPanel.TabIndex = 5;
+            this.pn_ColorSelectPanel.MouseDown += new System.Windows.Forms.MouseEventHandler(this.pn_ColorSelectPanel_MouseDown);
+            // 
+            // bt_Connect
+            // 
+            this.bt_Connect.Location = new System.Drawing.Point(27, 100);
+            this.bt_Connect.Name = "bt_Connect";
+            this.bt_Connect.Size = new System.Drawing.Size(100, 28);
+            this.bt_Connect.TabIndex = 6;
+            this.bt_Connect.Text = "Connect";
+            this.bt_Connect.UseVisualStyleBackColor = true;
+            this.bt_Connect.Click += new System.EventHandler(this.bt_Connect_Click);
+            // 
             // ClientForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(884, 661);
+            this.Controls.Add(this.bt_Connect);
+            this.Controls.Add(this.pn_ColorSelectPanel);
             this.Controls.Add(this.lb_ModeDisplay);
             this.Controls.Add(this.bt_Delete);
             this.Controls.Add(this.bt_Move);
             this.Controls.Add(this.bt_Draw);
             this.Controls.Add(this.pn_DrawingPanel);
+            this.DoubleBuffered = true;
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Name = "ClientForm";
             this.Text = "Client";
+            this.Load += new System.EventHandler(this.ClientForm_Load);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -114,6 +149,9 @@
         private System.Windows.Forms.Button bt_Move;
         private System.Windows.Forms.Button bt_Delete;
         private System.Windows.Forms.Label lb_ModeDisplay;
+        private System.Windows.Forms.ColorDialog colorDialog_drawColor;
+        private System.Windows.Forms.Panel pn_ColorSelectPanel;
+        private System.Windows.Forms.Button bt_Connect;
     }
 }
 
