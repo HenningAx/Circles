@@ -101,6 +101,9 @@ namespace CirclesServer
 
             Send(handler, hasLoaded);
 
+            EnableLoadButton(false);
+            EnableSaveButton(true);
+
             if(hasLoaded)
             {
                 byte[] circleAmountData = BitConverter.GetBytes(CircleList.Count);
@@ -212,12 +215,39 @@ namespace CirclesServer
                 new AsyncCallback(ReadCallback), recCircle);
 
             }
-            else
+            else if(bytesRead > 0)
             {
-                // Not all data received. Get more.
-                handler.BeginReceive(recCircle.buffer, 0, recCircle.BufferSize, 0,
-                new AsyncCallback(ReadCallback), recCircle);
+                string Command = Encoding.ASCII.GetString(recCircle.buffer);
+                if(Command.Contains("Shutdown"))
+                {
+                    //handler.EndReceive(ar);
+
+                    // Start listening for connections
+                    MessageBox.Show("Server is waiting for connection");
+
+                    // Set the event to nonsignaled state.
+                    allDone.Reset();
+
+                    // Start an asynchronous socket to listen for connections.
+                    Console.WriteLine("Waiting for a connection...");
+                    sListener.BeginAccept(
+                        new AsyncCallback(AcceptCallback), sListener);
+
+                    bt_StartServer.Enabled = false;
+                    EnableLoadButton(true);
+                    EnableSaveButton(true);
+                } 
+                else
+                {
+                    // Not all data received. Get more.
+                    handler.BeginReceive(recCircle.buffer, 0, recCircle.BufferSize, 0,
+                    new AsyncCallback(ReadCallback), recCircle);
+                }             
             }
+
+            // Not all data received. Get more.
+            handler.BeginReceive(recCircle.buffer, 0, recCircle.BufferSize, 0,
+            new AsyncCallback(ReadCallback), recCircle);
 
         }
 
@@ -251,6 +281,36 @@ namespace CirclesServer
             else
             {
                 tB_averageRad.Text = text;
+            }
+        }
+
+        delegate void EnableLoadButtonCallback(bool enabled);
+
+        private void EnableLoadButton(bool enabled)
+        {
+            if(bt_Load.InvokeRequired)
+            {
+                EnableLoadButtonCallback d = new EnableLoadButtonCallback(EnableLoadButton);
+                Invoke(d, new object[] { enabled });
+            }
+            else
+            {
+                bt_Load.Enabled = enabled;
+            }
+        }
+
+        delegate void EnableSaveButtonCallback(bool enabled);
+
+        private void EnableSaveButton(bool enabled)
+        {
+            if (bt_Save.InvokeRequired)
+            {
+                EnableSaveButtonCallback d = new EnableSaveButtonCallback(EnableSaveButton);
+                Invoke(d, new object[] { enabled });
+            }
+            else
+            {
+                bt_Save.Enabled = enabled;
             }
         }
 

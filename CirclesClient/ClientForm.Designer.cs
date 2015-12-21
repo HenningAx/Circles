@@ -36,6 +36,7 @@
             this.colorDialog_drawColor = new System.Windows.Forms.ColorDialog();
             this.pn_ColorSelectPanel = new System.Windows.Forms.Panel();
             this.bt_Connect = new System.Windows.Forms.Button();
+            this.bt_Disconnect = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // pn_DrawingPanel
@@ -112,7 +113,7 @@
             // 
             // bt_Connect
             // 
-            this.bt_Connect.Location = new System.Drawing.Point(27, 100);
+            this.bt_Connect.Location = new System.Drawing.Point(27, 52);
             this.bt_Connect.Name = "bt_Connect";
             this.bt_Connect.Size = new System.Drawing.Size(100, 28);
             this.bt_Connect.TabIndex = 6;
@@ -120,11 +121,23 @@
             this.bt_Connect.UseVisualStyleBackColor = true;
             this.bt_Connect.Click += new System.EventHandler(this.bt_Connect_Click);
             // 
+            // bt_Disconnect
+            // 
+            this.bt_Disconnect.Enabled = false;
+            this.bt_Disconnect.Location = new System.Drawing.Point(27, 100);
+            this.bt_Disconnect.Name = "bt_Disconnect";
+            this.bt_Disconnect.Size = new System.Drawing.Size(100, 28);
+            this.bt_Disconnect.TabIndex = 7;
+            this.bt_Disconnect.Text = "Disconnect";
+            this.bt_Disconnect.UseVisualStyleBackColor = true;
+            this.bt_Disconnect.Click += new System.EventHandler(this.bt_Disconnect_Click);
+            // 
             // ClientForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(884, 661);
+            this.Controls.Add(this.bt_Disconnect);
             this.Controls.Add(this.bt_Connect);
             this.Controls.Add(this.pn_ColorSelectPanel);
             this.Controls.Add(this.lb_ModeDisplay);
@@ -152,6 +165,7 @@
         private System.Windows.Forms.ColorDialog colorDialog_drawColor;
         private System.Windows.Forms.Panel pn_ColorSelectPanel;
         private System.Windows.Forms.Button bt_Connect;
+        private System.Windows.Forms.Button bt_Disconnect;
     }
 }
 

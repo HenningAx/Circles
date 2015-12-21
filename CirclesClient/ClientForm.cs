@@ -297,19 +297,19 @@ namespace CirclesClient
         {
             ipHostInfo = Dns.GetHostEntry("");
             ipAddress = ipHostInfo.AddressList[0];
-            remoteEP = new IPEndPoint(ipAddress, 11000);
-
-            senderSocket = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            remoteEP = new IPEndPoint(ipAddress, 11000);         
         }
 
         private void bt_Connect_Click(object sender, EventArgs e)
         {
             try
             {
+                senderSocket = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                 senderSocket.Connect(remoteEP);
 
                 MessageBox.Show("Socket connected to {0}" + senderSocket.RemoteEndPoint.ToString());
                 bt_Connect.Enabled = false;
+                bt_Disconnect.Enabled = true;
                 bIsConnected = true;
                 bt_Delete.Enabled = true;
                 bt_Draw.Enabled = true;
@@ -324,7 +324,7 @@ namespace CirclesClient
                 {
                     byte[] amountBuffer = new byte[sizeof(int)];
                     int amountBytesRec = senderSocket.Receive(amountBuffer);
-
+                    CircleList.Clear();
 
                     int CirclesToRec = BitConverter.ToInt32(amountBuffer, 0);
                     MessageBox.Show(CirclesToRec.ToString() + " circles loaded");
@@ -381,6 +381,15 @@ namespace CirclesClient
             }
 
             return outData;
+        }
+
+        private void bt_Disconnect_Click(object sender, EventArgs e)
+        {
+            senderSocket.Send(Encoding.ASCII.GetBytes("Shutdown"));
+            senderSocket.Shutdown(SocketShutdown.Both);
+            senderSocket.Close();
+            bt_Connect.Enabled = true;
+            bt_Disconnect.Enabled = false;
         }
     }
 }
