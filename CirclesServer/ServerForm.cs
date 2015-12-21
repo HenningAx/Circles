@@ -29,6 +29,8 @@ namespace CirclesServer
 
         public static ManualResetEvent allDone = new ManualResetEvent(false);
 
+        float averageRad = 0;
+
         public ServerForm()
         {
             InitializeComponent();
@@ -39,9 +41,6 @@ namespace CirclesServer
             permission = new SocketPermission(NetworkAccess.Accept, TransportType.Tcp, "", SocketPermission.AllPorts);
 
             sListener = null;
-
-            CircleObject TestCircleObject = new CircleObject();
-            MessageBox.Show("Circle Byte Size = " + TestCircleObject.BufferSize);
 
             // Ensures the code to have permission to access a Socket 
             permission.Demand();
@@ -74,6 +73,8 @@ namespace CirclesServer
                     new AsyncCallback(AcceptCallback), sListener);
 
                 bt_StartServer.Enabled = false;
+                bt_Load.Enabled = false;
+                bt_Save.Enabled = true;
 
                 // Wait until a connection is made before continuing.
                 allDone.WaitOne();
@@ -96,7 +97,22 @@ namespace CirclesServer
             Socket listener = (Socket)ar.AsyncState;
             Socket handler = listener.EndAccept(ar);
 
-            // Create the state object.
+            bool hasLoaded = CircleList.Count > 0;
+
+            Send(handler, hasLoaded);
+
+            if(hasLoaded)
+            {
+                byte[] circleAmountData = BitConverter.GetBytes(CircleList.Count);
+                handler.Send(circleAmountData);
+
+                foreach(Circle circleToSend in CircleList)
+                {
+                    handler.Send(SerializeCircle(circleToSend));                   
+                }
+            }
+
+            // Create the circle object.
             CircleObject recCircle = new CircleObject();
             recCircle.workSocket = handler;
             handler.BeginReceive(recCircle.buffer, 0, recCircle.BufferSize, 0, new AsyncCallback(ReadCallback), recCircle);
@@ -105,8 +121,8 @@ namespace CirclesServer
         public void ReadCallback(IAsyncResult ar)
         {
 
-            // Retrieve the state object and the handler socket
-            // from the asynchronous state object.
+            // Retrieve the circle object and the handler socket
+            // from the asynchronous circle object.
             CircleObject recCircle = (CircleObject)ar.AsyncState;
             Socket handler = recCircle.workSocket;
 
@@ -115,6 +131,7 @@ namespace CirclesServer
 
             if (bytesRead >= recCircle.BufferSize)
             {
+
                 Circle receivedCircle;
                 BinaryFormatter formatter = new BinaryFormatter();
                 using (var ms = new MemoryStream(recCircle.buffer))
@@ -127,10 +144,15 @@ namespace CirclesServer
                     if (!IsCircleColliding(receivedCircle))
                     {
                         CircleList.Add(receivedCircle);
+
+                        SetAmountText(CircleList.Count.ToString());
+
+                        // Validate the client action
                         Send(handler, true);
                     }
                     else
                     {
+                        // Block the client action
                         Send(handler, false);
                     }
 
@@ -140,6 +162,23 @@ namespace CirclesServer
                     if (receivedCircle.Radius < 0)
                     {
                         CircleList.RemoveAt(receivedCircle.Index);
+
+                        float totalRad = 0.0f;
+
+                        // Reset the index variable of the remaining circles                   
+                        for (int i = 0; i < CircleList.Count; i++)
+                        {
+                            CircleList[i].Index = i;
+                            totalRad += CircleList[i].Radius;
+                        }
+
+                        averageRad = totalRad / CircleList.Count;
+
+                        SetAverageRadText(averageRad.ToString());
+
+                        SetAmountText(CircleList.Count.ToString());
+
+                        // Validate the client action
                         Send(handler, true);
                     }
                     else
@@ -147,15 +186,28 @@ namespace CirclesServer
                         if (!IsCircleColliding(receivedCircle))
                         {
                             CircleList[receivedCircle.Index] = receivedCircle;
+                            float totalRad = 0.0f;
+                            foreach (Circle c in CircleList)
+                            {
+                                totalRad += c.Radius;
+                            }
+
+                            averageRad = totalRad / CircleList.Count;
+
+                            SetAverageRadText(averageRad.ToString());
+
+                            // Validate the client action
                             Send(handler, true);
                         }
                         else
                         {
+                            // Block the client action
                             Send(handler, false);
                         }
                     }
                 }
 
+                // Continue to receiving to catch the next sending cirlce
                 handler.BeginReceive(recCircle.buffer, 0, recCircle.BufferSize, 0,
                 new AsyncCallback(ReadCallback), recCircle);
 
@@ -169,15 +221,63 @@ namespace CirclesServer
 
         }
 
+        delegate void SetAmountTextCallback(string text);
+
+        // Thread safe set the text of the amount of circles
+        private void SetAmountText(string text)
+        {
+            if(this.tB_CircleAmount.InvokeRequired)
+            {
+                SetAmountTextCallback d = new SetAmountTextCallback(SetAmountText);
+                this.Invoke(d, new object[] { text });
+
+            }
+            else
+            {
+                this.tB_CircleAmount.Text = text;
+            }
+        }
+
+        delegate void SetAverageRadTextCallback(string text);
+
+        // Thread safe set the text of the average radius
+        private void SetAverageRadText(string text)
+        {
+            if (tB_averageRad.InvokeRequired)
+            {
+                SetAverageRadTextCallback d = new SetAverageRadTextCallback(SetAverageRadText);
+                Invoke(d, new object[] { text });
+            }
+            else
+            {
+                tB_averageRad.Text = text;
+            }
+        }
+
+        private byte[] SerializeCircle(Circle circleToSerialize)
+        {
+            BinaryFormatter formatter = new BinaryFormatter();
+            byte[] outData;
+
+            using (var ms = new MemoryStream())
+            {
+                formatter.Serialize(ms, circleToSerialize);
+                outData = ms.ToArray();
+            }
+
+            return outData;
+        }
+
         private static void Send(Socket handler, bool data)
         {
-            // Convert the string data to byte data using ASCII encoding.
+            // Convert the bool to a byte array.
             byte[] byteData = BitConverter.GetBytes(data);
 
             // Begin sending the data to the remote device.
             handler.Send(byteData);
         }
 
+        // Checks if the given circle is colliding with any other circle, returns true if there is a collision
         private bool IsCircleColliding(Circle circleToCheck)
         {
             bool outBool = false;
@@ -190,15 +290,60 @@ namespace CirclesServer
                     if (Distance < testCircle.Radius + circleToCheck.Radius)
                     {
                         outBool = true;
+                        return outBool;
                     }
                 }
             }
             return outBool;
         }
 
+        private void fD_loadConfig_FileOk(object sender, CancelEventArgs e)
+        {
+            using (Stream stream = fD_loadConfig.OpenFile())
+            {
+                var bformatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+
+                CircleList = (List<Circle>)bformatter.Deserialize(stream);
+
+                stream.Close();
+
+                float totalRad = 0.0f;
+                foreach (Circle c in CircleList)
+                {
+                    totalRad += c.Radius;
+                }
+
+                averageRad = totalRad / CircleList.Count;
+
+                SetAverageRadText(averageRad.ToString());
+                SetAmountText(CircleList.Count.ToString());
+            }
+        }
+
+        private void bt_Save_Click(object sender, EventArgs e)
+        {
+            fD_saveConfig.ShowDialog();
+        }
+
+        private void bt_Load_Click(object sender, EventArgs e)
+        {
+            fD_loadConfig.ShowDialog();
+        }
+
+        private void fD_saveConfig_FileOk(object sender, CancelEventArgs e)
+        {
+            using (Stream stream = fD_saveConfig.OpenFile())
+            {
+                var bformatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+
+                bformatter.Serialize(stream, CircleList);
+
+                stream.Close();
+            }
+        }
     }
 
-    // State object for reading client data asynchronously
+    // Circle object for reading client data asynchronously
     public class CircleObject
     {
         // Client  socket.

@@ -161,6 +161,13 @@ namespace CirclesClient
                         if (SendCircleRequest(CircleList[SelectedCircleIndex]))
                         {
                             CircleList.RemoveAt(SelectedCircleIndex);
+
+                            // Reset the index variable of the remaining circles   
+                            for (int i = 0; i < CircleList.Count; i++)
+                            {
+                                CircleList[i].Index = i;
+                            }
+
                             SelectedCircleIndex = -1;
                             pn_DrawingPanel.Invalidate();
                         }
@@ -307,6 +314,38 @@ namespace CirclesClient
                 bt_Delete.Enabled = true;
                 bt_Draw.Enabled = true;
                 bt_Move.Enabled = true;
+
+                byte[] bufferBytes = new byte[1];
+                int bytesRec = senderSocket.Receive(bufferBytes);
+
+                bool recBool = BitConverter.ToBoolean(bufferBytes, 0);
+
+                if(recBool)
+                {
+                    byte[] amountBuffer = new byte[sizeof(int)];
+                    int amountBytesRec = senderSocket.Receive(amountBuffer);
+
+
+                    int CirclesToRec = BitConverter.ToInt32(amountBuffer, 0);
+                    MessageBox.Show(CirclesToRec.ToString() + " circles loaded");
+
+                    for(int i = 0; i < CirclesToRec; i++)
+                    {
+                        byte[] circleBuffer = new byte[441];
+                        int circleBytesRec = senderSocket.Receive(circleBuffer);
+
+                        Circle receivedCircle;
+                        BinaryFormatter formatter = new BinaryFormatter();
+                        using (var ms = new MemoryStream(circleBuffer))
+                        {
+                            receivedCircle = (Circle)formatter.Deserialize(ms);
+                        }
+
+                        CircleList.Add(receivedCircle);
+                    }
+                }
+
+                pn_DrawingPanel.Invalidate();
             }
             catch (Exception ex)
             {
@@ -319,7 +358,7 @@ namespace CirclesClient
         {
             bool outBool = false;
 
-            byte[] bufferBytes = new byte[2];
+            byte[] bufferBytes = new byte[1];
             byte[] sendBytes = SerializeCircle(circleToSend);
 
             int bytesSent = senderSocket.Send(sendBytes);
