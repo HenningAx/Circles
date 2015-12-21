@@ -115,13 +115,13 @@
             // 
             this.fD_loadConfig.DefaultExt = "bin";
             this.fD_loadConfig.FileName = "CircleConfig";
-            this.fD_loadConfig.Filter = "\"Binary Files|*.bin|All files|*.*\"";
+            this.fD_loadConfig.Filter = "Binary Files|*.bin|All files|*.*";
             this.fD_loadConfig.FileOk += new System.ComponentModel.CancelEventHandler(this.fD_loadConfig_FileOk);
             // 
             // fD_saveConfig
             // 
             this.fD_saveConfig.DefaultExt = "bin";
-            this.fD_saveConfig.Filter = "\"Binary Files|*.bin|All files|*.*\"";
+            this.fD_saveConfig.Filter = "Binary Files|*.bin|All files|*.*";
             this.fD_saveConfig.FileOk += new System.ComponentModel.CancelEventHandler(this.fD_saveConfig_FileOk);
             // 
             // ServerForm

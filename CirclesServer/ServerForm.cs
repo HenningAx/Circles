@@ -19,7 +19,11 @@ namespace CirclesServer
 
     public partial class ServerForm : Form
     {
+        // List of all circles
         List<Circle> CircleList = new List<Circle>();
+
+
+        // Socket connection 
 
         SocketPermission permission;
         Socket sListener;
@@ -36,6 +40,7 @@ namespace CirclesServer
             InitializeComponent();
         }
 
+        // Creates the server socket and start listening for a connection
         private void StartServer_Click(object sender, EventArgs e)
         {
             permission = new SocketPermission(NetworkAccess.Accept, TransportType.Tcp, "", SocketPermission.AllPorts);
@@ -69,8 +74,7 @@ namespace CirclesServer
 
                 // Start an asynchronous socket to listen for connections.
                 Console.WriteLine("Waiting for a connection...");
-                sListener.BeginAccept(
-                    new AsyncCallback(AcceptCallback), sListener);
+                sListener.BeginAccept(new AsyncCallback(AcceptCallback), sListener);
 
                 bt_StartServer.Enabled = false;
                 bt_Load.Enabled = false;
@@ -82,9 +86,6 @@ namespace CirclesServer
 
             }
             catch (Exception exc) { MessageBox.Show(exc.ToString()); }
-
-
-            //StartServer.Enabled = false;
         }
 
         public void AcceptCallback(IAsyncResult ar)
@@ -97,8 +98,8 @@ namespace CirclesServer
             Socket listener = (Socket)ar.AsyncState;
             Socket handler = listener.EndAccept(ar);
 
+            // Tell the client if the server has loaded a configuration
             bool hasLoaded = CircleList.Count > 0;
-
             Send(handler, hasLoaded);
 
             EnableLoadButton(false);
@@ -106,9 +107,11 @@ namespace CirclesServer
 
             if(hasLoaded)
             {
+                // If the server has loaded a configuration send the client the amount of circles he has to receive
                 byte[] circleAmountData = BitConverter.GetBytes(CircleList.Count);
                 handler.Send(circleAmountData);
 
+                // Send all circles in the current configuration
                 foreach(Circle circleToSend in CircleList)
                 {
                     handler.Send(SerializeCircle(circleToSend));                   
@@ -132,9 +135,10 @@ namespace CirclesServer
             // Read data from the client socket. 
             int bytesRead = handler.EndReceive(ar);
 
+            // If the server received a full circle
             if (bytesRead >= recCircle.BufferSize)
             {
-
+                // Deserialize the received bytes to a circle
                 Circle receivedCircle;
                 BinaryFormatter formatter = new BinaryFormatter();
                 using (var ms = new MemoryStream(recCircle.buffer))
@@ -142,8 +146,10 @@ namespace CirclesServer
                     receivedCircle = (Circle)formatter.Deserialize(ms);
                 }
 
+                // If the index of the received circle if higher then amount of circles
                 if (receivedCircle.Index >= CircleList.Count)
                 {
+                    // Check if the new circle is colliding with any other circle and if not add it to the circle list
                     if (!IsCircleColliding(receivedCircle))
                     {
                         CircleList.Add(receivedCircle);
@@ -162,13 +168,15 @@ namespace CirclesServer
                 }
                 else
                 {
+                    // If the radius of the received circle is negative interpret this as a delte request 
                     if (receivedCircle.Radius < 0)
                     {
+                        // Delete the received circle from the list
                         CircleList.RemoveAt(receivedCircle.Index);
 
                         float totalRad = 0.0f;
 
-                        // Reset the index variable of the remaining circles                   
+                        // Reset the index variable of the remaining circles and recalculate the average radius                 
                         for (int i = 0; i < CircleList.Count; i++)
                         {
                             CircleList[i].Index = i;
@@ -186,8 +194,10 @@ namespace CirclesServer
                     }
                     else
                     {
+                        // This is a move request, check if the circle is colliding with any other circle
                         if (!IsCircleColliding(receivedCircle))
                         {
+                            // Override the circle in the circle list at the index of the received circle
                             CircleList[receivedCircle.Index] = receivedCircle;
                             float totalRad = 0.0f;
                             foreach (Circle c in CircleList)
@@ -215,12 +225,15 @@ namespace CirclesServer
                 new AsyncCallback(ReadCallback), recCircle);
 
             }
-            else if(bytesRead > 0)
+            else
+            // If the server received less bytes then a circle has but at least some check if this is a shutdown request
+            if(bytesRead > 0)
             {
+                // Check if the received data is a shutdown request by checking if the byte array contains the string "Shutdown"
                 string Command = Encoding.ASCII.GetString(recCircle.buffer);
                 if(Command.Contains("Shutdown"))
                 {
-                    //handler.EndReceive(ar);
+                    // Reset the socket to wait for a connection again
 
                     // Start listening for connections
                     MessageBox.Show("Server is waiting for connection");
@@ -286,6 +299,7 @@ namespace CirclesServer
 
         delegate void EnableLoadButtonCallback(bool enabled);
 
+        // Thread safe enable/disable the load button
         private void EnableLoadButton(bool enabled)
         {
             if(bt_Load.InvokeRequired)
@@ -301,6 +315,7 @@ namespace CirclesServer
 
         delegate void EnableSaveButtonCallback(bool enabled);
 
+        // Thread safe enable/disable the save button
         private void EnableSaveButton(bool enabled)
         {
             if (bt_Save.InvokeRequired)
@@ -314,6 +329,7 @@ namespace CirclesServer
             }
         }
 
+        // Serialize a circle to send it through a circle 
         private byte[] SerializeCircle(Circle circleToSerialize)
         {
             BinaryFormatter formatter = new BinaryFormatter();
@@ -328,6 +344,7 @@ namespace CirclesServer
             return outData;
         }
 
+        // Send a boolean through the given socket
         private static void Send(Socket handler, bool data)
         {
             // Convert the bool to a byte array.
@@ -357,16 +374,23 @@ namespace CirclesServer
             return outBool;
         }
 
+        // Tries to load the circle configuration file
         private void fD_loadConfig_FileOk(object sender, CancelEventArgs e)
         {
             using (Stream stream = fD_loadConfig.OpenFile())
             {
                 var bformatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
 
-                CircleList = (List<Circle>)bformatter.Deserialize(stream);
+                // Tries to deserialize the loaded file to a List of Circles
+                try
+                {
+                    CircleList = (List<Circle>)bformatter.Deserialize(stream);
+                }
+                catch (Exception exc) { MessageBox.Show("Failed to load file"); }
 
                 stream.Close();
 
+                // Calculate and the average radius and set the text in the text box
                 float totalRad = 0.0f;
                 foreach (Circle c in CircleList)
                 {
@@ -390,6 +414,7 @@ namespace CirclesServer
             fD_loadConfig.ShowDialog();
         }
 
+        // Save the current circle configuration to a binary file
         private void fD_saveConfig_FileOk(object sender, CancelEventArgs e)
         {
             using (Stream stream = fD_saveConfig.OpenFile())
@@ -397,7 +422,6 @@ namespace CirclesServer
                 var bformatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
 
                 bformatter.Serialize(stream, CircleList);
-
                 stream.Close();
             }
         }
@@ -413,6 +437,7 @@ namespace CirclesServer
         // Receive buffer.
         public byte[] buffer = new byte[1024];
 
+        // Serialize a circle to get the size of a circle object in bytes
         public CircleObject()
         {
             BinaryFormatter testformatter = new BinaryFormatter();
